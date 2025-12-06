@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kuttappan's Space — Note</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root{ --accent:#6a5acd; --muted:#777; }
+    html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:#f6f7fb;}
+    header{ height:72px; display:flex; gap:12px; align-items:center; padding:10px 16px; background:linear-gradient(90deg, rgba(255,255,255,0.9), rgba(250,250,255,0.9)); box-shadow:0 2px 10px rgba(20,20,60,0.04); }
+    .brand{ display:flex; align-items:center; gap:12px; font-weight:700; color:var(--accent); font-size:18px; }
+    .user-block{ margin-left:auto; display:flex; align-items:center; gap:10px; }
+    .user-info{ font-size:13px; color:var(--muted); }
+    .small{ font-size:12px;color:#999; }
+    .avatar-sm{ width:42px;height:42px;border-radius:50%; overflow:hidden; border:3px solid transparent; }
+    .avatar-sm img{ width:100%; height:100%; object-fit:cover; display:block; }
+    .avatar-sm.active{ border-color: rgba(106,90,205,0.9); box-shadow: 0 6px 16px rgba(106,90,205,0.08); transform: translateY(-2px); }
+    .container{ height: calc(100% - 72px); display:flex; flex-direction:column; }
+    textarea{ flex:1; margin:16px; padding:18px; border-radius:12px; border:none; outline:none; background:white; box-shadow:0 8px 28px rgba(20,20,60,0.04); font-size:16px; resize:none; line-height:1.6; }
+    footer{ padding:10px 16px; text-align:center; color:#666; font-size:13px; background:transparent; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">🌌 Kuttappan's Space</div>
+
+    <div class="user-block" id="userBlock">
+      <!-- avatars & username will be injected by JS -->
+      <div class="avatar-sm" id="avatarInnu" title="Innu"><img src="images/avatar-innu.png" alt=""></div>
+      <div class="avatar-sm" id="avatarKuttu" title="Kuttu"><img src="images/avatar-kuttu.png" alt=""></div>
+      <div class="user-info" id="userInfo">Loading...</div>
+      <form method="POST" action="/logout" style="margin:0;">
+        <button style="margin-left:10px;padding:8px 10px;border-radius:8px;border:none;background:#eee;cursor:pointer;">Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <div class="container">
+    <textarea id="note" placeholder="Write something sweet for your person..."></textarea>
+    <div id="footer" class="small">Edits update in real-time • Debounced (300ms)</div>
+  </div>
+
+  <script>
+    const textarea = document.getElementById('note');
+    const userInfoEl = document.getElementById('userInfo');
+    const avatarInnu = document.getElementById('avatarInnu');
+    const avatarKuttu = document.getElementById('avatarKuttu');
+
+    fetch('/api/whoami').then(r=>r.json()).then(data=>{
+      if(!data.loggedIn) return window.location='/';
+      const user = data.username;
+      userInfoEl.textContent = 'You: ' + data.display;
+      // highlight active avatar
+      if(user.toLowerCase() === 'innu'){
+        avatarInnu.classList.add('active');
+        avatarKuttu.classList.remove('active');
+      } else {
+        avatarKuttu.classList.add('active');
+        avatarInnu.classList.remove('active');
+      }
+    });
+
+    // WebSocket real-time logic (same as before)
+    let isRemote = false;
+    const ws = new WebSocket('ws://localhost:3000');
+
+    ws.onmessage = (evt)=>{
+      try {
+        const data = JSON.parse(evt.data);
+        if(data.type === 'note'){
+          isRemote = true;
+          textarea.value = data.content;
+          setTimeout(()=> isRemote = false, 0);
+        }
+      } catch(e){ console.warn(e); }
+    };
+
+    // Debounce send (300ms)
+    let t;
+    textarea.addEventListener('input', ()=>{
+      if(isRemote) return;
+      clearTimeout(t);
+      t = setTimeout(()=> {
+        if(ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'note', content: textarea.value }));
+      }, 300);
+    });
+  </script>
+</body>
+</html>
